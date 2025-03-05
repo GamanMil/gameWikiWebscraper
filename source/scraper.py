@@ -9,7 +9,7 @@ import time
 import csv
 import json
 
-base_url = "https://minecraft.wiki"
+base_url = "https://minecraftitemids.com"
 
 
 def setup_driver():
@@ -18,87 +18,68 @@ def setup_driver():
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
-    # specific for chrome driver - useless options that use resources
 
     service = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=chrome_options)
     return driver
 
 
-def scrape_page(driver, url):
+def scrape_item_page(driver, url):
     driver.get(url)
-
     try:
         WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CLASS_NAME, 'mw-page-title-main'))
+            EC.presence_of_element_located((By.CLASS_NAME, 'item-page-container'))
         )
     except:
         print(f"Failed to load page: {url}")
         return None
 
-    title = driver.find_element(By.CLASS_NAME, 'mw-page-title-main').text.strip()
+    title = driver.find_element(By.CLASS_NAME, 'item-name-title').text.strip()
+    item_id = driver.find_element(By.CLASS_NAME, 'item-id-container').text.strip()
+    item_data = {"Title": title, "ID": item_id}
 
-    content = driver.find_element(By.CLASS_NAME, 'mw-parser-output').text.strip()
-
-    infobox_data = {}
     try:
-        infobox = driver.find_element(By.CLASS_NAME, 'infobox')
-        for row in infobox.find_elements(By.TAG_NAME, 'tr'):
-            try:
-                key = row.find_element(By.TAG_NAME, 'th').text.strip()
-                value = row.find_element(By.TAG_NAME, 'td').text.strip()
-                infobox_data[key] = value
-            except:
-                continue
+        description = driver.find_element(By.CLASS_NAME, 'item-description').text.strip()
+        item_data["Description"] = description
     except:
-        pass
+        item_data["Description"] = ""
 
-    return {
-        "title": title,
-        "content": content,
-        "infobox": infobox_data
-    }
+    return item_data
 
 
-def crawl_category(driver, category_url):
-    driver.get(category_url)
+def scrape_all_items(driver):
+    driver.get(base_url + "/items/")
 
     try:
         WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.XPATH, '//div[@class="mw-category-generated"]//a'))
+            EC.presence_of_element_located((By.CLASS_NAME, 'items-listing'))
         )
     except:
-        print(f"Subpage links did not load on {category_url}")
+        print("Failed to load item list page")
         return []
 
-    subpage_links = driver.find_elements(By.XPATH, '//div[@class="mw-category-generated"]//a')
+    item_links = driver.find_elements(By.XPATH, '//div[@class="items-listing"]//a')
+    item_urls = [link.get_attribute('href') for link in item_links]
 
-    if not subpage_links:
-        print(f"No subpage links found on {category_url}")
-        return []
-
-    subpage_urls = [link.get_attribute('href') for link in subpage_links]
-
-    all_data = []
-    for url in subpage_urls:
+    all_items = []
+    for url in item_urls:
         print(f"Scraping: {url}")
-        page_data = scrape_page(driver, url)
-        if page_data:
-            all_data.append(page_data)
-        time.sleep(2)
+        item_data = scrape_item_page(driver, url)
+        if item_data:
+            all_items.append(item_data)
+        time.sleep(1)
 
-    return all_data
+    return all_items
 
 
 def save_to_csv(data, filename):
     with open(filename, 'w', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
-        writer.writerow(["Title", "Content", "Infobox"])
+        writer.writerow(["Title", "ID", "Description"])
         for item in data:
-            writer.writerow([item["title"], item["content"], json.dumps(item["infobox"], ensure_ascii=False)])
+            writer.writerow([item["Title"], item["ID"], item["Description"]])
 
 
-# Save data to a JSON file
 def save_to_json(data, filename):
     with open(filename, 'w', encoding='utf-8') as file:
         json.dump(data, file, indent=4, ensure_ascii=False)
@@ -106,21 +87,13 @@ def save_to_json(data, filename):
 
 if __name__ == "__main__":
     driver = setup_driver()
+    print("Scraping all items...")
+    data = scrape_all_items(driver)
 
-    categories = {
-        "blocks": "https://minecraft.wiki/w/Category:Blocks",
-        "items": "https://minecraft.wiki/w/Category:Items",
-        "mobs": "https://minecraft.wiki/w/Category:Mobs"
-    }
+    save_to_csv(data, "minecraft_items.csv")
+    print(f"Saved {len(data)} entries to minecraft_items.csv")
 
-    for category_name, category_url in categories.items():
-        print(f"Scraping category: {category_name}")
-        data = crawl_category(driver, category_url)
-
-        save_to_csv(data, f"{category_name}_data.csv")
-        print(f"Saved {len(data)} entries to {category_name}_data.csv")
-
-        save_to_json(data, f"{category_name}_data.json")
-        print(f"Saved {len(data)} entries to {category_name}_data.json")
+    save_to_json(data, "minecraft_items.json")
+    print(f"Saved {len(data)} entries to minecraft_items.json")
 
     driver.quit()
