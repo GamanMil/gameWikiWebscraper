@@ -14,6 +14,11 @@ python -m pip install -r requirements.txt
 Chrome must be installed. `webdriver-manager` downloads a compatible Chrome
 driver the first time the scraper runs.
 
+Chrome may emit background GCM registration warnings in some environments.
+The scraper disables Chrome's unrelated background services and redirects
+driver startup logging, so these warnings do not normally appear. They do not
+indicate a scraping failure.
+
 ## Run
 
 Run the complete item scrape:

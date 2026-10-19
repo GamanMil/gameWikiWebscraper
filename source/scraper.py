@@ -11,6 +11,7 @@ import csv
 import io
 import json
 import logging
+import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -56,8 +57,13 @@ def setup_driver(headless: bool = True) -> webdriver.Chrome:
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-background-networking")
+    chrome_options.add_argument("--disable-component-update")
+    chrome_options.add_argument("--disable-sync")
+    chrome_options.add_argument("--log-level=3")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-logging"])
 
-    service = Service(ChromeDriverManager().install())
+    service = Service(ChromeDriverManager().install(), log_output=os.devnull)
     return webdriver.Chrome(service=service, options=chrome_options)
 
 
